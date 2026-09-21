@@ -19,3 +19,15 @@
 * Uses two Transformers: one for view-independent light transport and one for view-dependent rendering.
 * Trains end-to-end using reference images and renders unseen scenes without retraining or ray tracing.
 * Has high computational costs and supports limited scene complexity.
+
+##### Müller et al. 2021. Real-time Neural Radiance Caching for Path Tracing.
+
+* Uses a small MLP to cache radiance and shorten path tracing.
+* Trains the network online while rendering, without pretraining.
+* Reduces rendering cost and noise, but introduces bias from the neural cache.
+
+##### Nimier-David et al. 2020. Radiative Backpropagation: An Adjoint Method for Lightning-Fast Dierentiable Rendering
+
+* Treats backpropagation as an adjoint light transport problem.
+* Computes gradients without storing the full rendering history.
+* Uses separate forward and adjoint simulations for differentiable rendering.
