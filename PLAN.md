@@ -18,3 +18,65 @@ $$
 
 본 연구는 정적 장면에서 발생하는 이러한 Multi-Bounce Transport 정보를 Offline으로 학습하여, Runtime에서 반복적인 Monte Carlo Integration의 계산 비용을 감소시키고자 한다. 이를 위해 Multi-resolution Hash Grid로 공간적 정보를 표현하고, RNN의 Hidden State를 통해 연속된 Bounce 사이의 Transport 정보를 누적하여 각 지점의 Continuation Radiance를 예측한다. Runtime 에서는 Ray Tracing으로 Geometry와 Visibility를 계산하고, 학습된 RNN으로 Radiance를 근사한다. 이후 Two-Level Monte Carlo를 활용하여 Neural Approximation의 오차를 보정함으로써, 물리적 정확성과 계산 효율성을 동시에 확보하는 것을 목표로 한다.
 
+## 4. Mathematical Formulation and Proposed Method
+
+### 4.1. Recursive Light Transport 
+
+Rendering Equation은 다음과 같이 재귀적 연산자로 표현된다. 
+
+$$
+L = L_e + \mathcal{T}L
+$$
+
+여기서 $\mathcal{T}$는 Geometry, Visibility 및 material interaction에 의해 결정되는 Light Transport Operator이다. 기존 Path Tracing은 Multi-Bounce Light Transport를 Monte Carlo Sampling으로 반복 추정한다. 본 연구는 이러한 Transport 정보를 Neural Network로 학습하여 반복적인 Radiance Estimation의 계산 비용을 줄이고자 한다. 
+
+### 4.2. Recurrent Neural Light Transport
+
+본 연구는 Multiresolution Hash Grid와 Recurrent Neural Network(RNN)를 결합하여 정적 장면의 Multi-Bounce Radiance를 표현한다. Hash Grid는 공간적 정보를 인코딩 하고, RNN은 연속된 Bounce에서 발생하는 Transport State를 Hidden State에 누적한다.
+
+$$
+h_d = \operatorname{RNN}_{\theta}(z_d, h_{d-1})
+$$
+
+$$
+\widetilde{L}_i = g_{\theta}(z_d, \omega_i, h_d)
+$$
+
+
+여기서 $z_d$는 현재 Bounce의 Position, Direction 및 Material Feature를 포함하며, $h_d$는 이전 Bounce의 정보를 요약한다. 핵심 가설은 제한된 Neural Representation에서 Recurrent Memory가 Radiance Prediction의 정확도와 표현 효율을 개선할 수 있다는 것이다. 
+
+### 4.3. Offline Training
+
+정적 장면에서 Path Tracing을 수행하여 Bounce별 Transport State와 Radiance 데이터를 수집한다. 초기 실험에서는 Continuation Radiance를 학습하며, 최종적으로는 Monte Carlo 보정과 일관된 Incident Radiance Prediction을 목표로 한다.
+
+$$
+\mathcal{L}(\theta)
+=
+\mathbb{E}\left[
+\left\|
+g_{\theta}(s,H)-\widehat{L}
+\right\|_2^2
+\right]
+$$
+
+학습된 Network Parameters와 Hash Grid는 Runtime에서 재사용한다. RNN의 Hidden State는 각 Light Path를 따라 갱신한다.
+
+### 4.4. Neural-Assisted Monte Carlo Rendering
+
+Runtime에서는 Ray Tracing으로 Geometry와 Visibility를 계산하고, 학습된 RNN을 이용하여 Incident Radiance를 근사한다. Neural Approximation에서 발생하는 오차는 Two-Level Monte Carlo를 이용하여 보정한다.
+
+$$
+\widehat{I}
+=
+\widehat{I}_{\mathrm{Neural}}
++
+\widehat{I}_{\mathrm{Residual}}
+$$
+
+Neural Estimation은 다수의 저비용 Radiance Query를 수행하며, Residual Estimation은 실제 Path Tracing을 통해 근사 오차를 보정한다. 적절한 Sampling 및 Unbiased Correction 조건 아래에서 물리적으로 정확한 추정기를 구성하는 것을 목표로 한다. 최종적으로 Hash Grid + MLP와 Hash Grid + RNN을 비교하여 Recurrent Memory의 효과를 검증하고, 동일한 Rendering Time에서 Variance Reduction 및 Image Quality 개선 여부를 평가한다.
+
+## 5. Env. Setting 
+
+* Conda environment name: "mi"
+* Mitsuba 3.9.1 + drjit 1.5.0 + PyTorch 이용 
+* Assets path = "./assets" (cornell box 를 먼저 이용)
