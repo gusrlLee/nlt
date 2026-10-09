@@ -12,11 +12,14 @@ from tqdm import tqdm
 
 from dataset import ROOT, validate_dataset, save_tensor_file
 from model import RadianceModel, masked_mse
+from runtime import select_device
 
 
 def train_model(kind, data, args):
     torch.manual_seed(42)
-    model = RadianceModel(kind, data["bounds"]).to("cuda")
+    device = args.device
+    use_cuda = device.type == "cuda"
+    model = RadianceModel(kind, data["bounds"]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loaders = []
     for split in (data["train_ray"], ~data["train_ray"]):
@@ -24,7 +27,7 @@ def train_model(kind, data, args):
         selected = split & data["mask"].any(dim=1)
         samples = TensorDataset(*(data[key][selected] for key in ("features", "targets", "mask")))
         loaders.append(DataLoader(samples, batch_size=args.batch_size,
-                                  shuffle=len(loaders) == 0, pin_memory=True))
+                                  shuffle=len(loaders) == 0, pin_memory=use_cuda))
     history = {"train": [], "validation": []}
     best = float("inf")
     start = 0
@@ -46,7 +49,7 @@ def train_model(kind, data, args):
             batches = tqdm(loader, desc=f"{kind} {epoch + 1} {name}", leave=False)
             with torch.set_grad_enabled(training):
                 for x, y, mask in batches:
-                    x, y, mask = (v.to("cuda", non_blocking=True) for v in (x, y, mask))
+                    x, y, mask = (v.to(device, non_blocking=use_cuda) for v in (x, y, mask))
                     if training:
                         optimizer.zero_grad(set_to_none=True)
                     loss = masked_mse(model(x, mask), y, mask)
@@ -86,6 +89,7 @@ def render_inference(model, args):
 
     resolution = 256
     scene, tracer = setup_scene(resolution)
+    print(f"Mitsuba renderer: {mi.variant()}")
     assert model.kind == "gru"
     model.eval()
     device = next(model.parameters()).device
@@ -168,8 +172,8 @@ def main():
     parser.add_argument("--resume", action="store_true", help="Continue from last checkpoints")
     args = parser.parse_args()
     assert args.epochs > 0 and args.batch_size > 0 and args.inference_spp > 0
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA PyTorch is required")
+    args.device = select_device()
+    print(f"PyTorch device: {args.device}")
     torch.manual_seed(42)
     data = torch.load(args.dataset, map_location="cpu", weights_only=True)
     validate_dataset(data)

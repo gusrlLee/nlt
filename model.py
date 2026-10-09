@@ -96,14 +96,17 @@ def masked_mse(prediction, target, mask):
     return (prediction[mask] - target[mask]).square().mean()
 
 
-def self_check():
+def self_check(device=None):
+    from runtime import select_device
+    device = select_device() if device is None else torch.device(device)
     torch.manual_seed(42)
     bounds = torch.tensor([[-1., 0., -1.], [1., 2., 1.]])
-    x = torch.rand(3, 4, 13)
+    x = torch.rand(3, 4, 13, device=device)
     mask = torch.tensor([[True, True, True, True], [True, True, False, False],
-                         [False, False, False, False]])
+                         [False, False, False, False]], device=device)
     for kind in ("mlp", "gru"):
-        model = RadianceModel(kind, bounds)
+        model = RadianceModel(kind, bounds).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=.001)
         y = model(x, mask)
         assert y.shape == (3, 4, 3) and torch.isfinite(y).all()
         assert (y[~mask] == 0).all()
@@ -124,14 +127,19 @@ def self_check():
                 if previous is not None:
                     assert torch.equal(hidden[~mask[:, d]], previous[~mask[:, d]])
             assert torch.allclose(y, torch.stack(steps, dim=1), atol=1e-6)
-            empty, unchanged = model.step(x[:, 0], torch.zeros(3, dtype=torch.bool), hidden)
+            empty, unchanged = model.step(
+                x[:, 0], torch.zeros(3, dtype=torch.bool, device=device), hidden)
             assert (empty == 0).all() and torch.equal(unchanged, hidden)
         loss = masked_mse(y, torch.zeros_like(y), mask)
         assert torch.allclose(loss, y[mask].square().mean())
         loss.backward()
         assert model.grid.tables[0].weight.grad is not None
         assert all(p.grad is None or torch.isfinite(p.grad).all() for p in model.parameters())
-    print("PASS: shapes, masks, gradients, independent rays, recurrent history and streaming steps")
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1., error_if_nonfinite=True)
+        optimizer.step()
+        assert all(torch.isfinite(p).all() for p in model.parameters())
+    print(f"PASS ({device}): shapes, masks, gradients, optimizer, independent rays, "
+          "recurrent history and streaming steps")
 
 
 if __name__ == "__main__":

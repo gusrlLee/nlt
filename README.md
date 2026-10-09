@@ -1,5 +1,67 @@
 # Neural Light Transport
 
+## 실행 환경 (Windows / Apple Silicon Mac)
+
+기존 conda `mi` 환경을 사용한다. 새 환경을 만들 필요는 없다.
+
+```sh
+conda activate mi
+python -m pip install numpy matplotlib tqdm mitsuba==3.9.1
+```
+
+PyTorch가 이미 설치되어 있다면 그대로 사용한다. 미설치 시 Apple Silicon Mac에서는
+`python -m pip install torch`, Windows CPU에서는
+`python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`를 실행한다.
+Windows CUDA 환경은 [PyTorch 공식 설치 선택기](https://pytorch.org/get-started/locally/)에서
+Windows / Pip / 해당 CUDA 버전을 선택해 안내된 명령으로 설치한다.
+Mac의 Python은 Rosetta x86_64가 아닌 arm64 환경을 사용한다.
+
+| 환경 | PyTorch 학습/신경망 추론 | Mitsuba 경로 추적 |
+| --- | --- | --- |
+| Windows + NVIDIA GPU | CUDA | CUDA (`cuda_ad_rgb`) |
+| Windows CPU | CPU | LLVM CPU (`llvm_ad_rgb`) |
+| M1 Pro 등 Apple Silicon Mac | MPS GPU | Metal GPU (`metal_ad_rgb`) |
+
+실행 시 두 백엔드를 독립적으로 자동 인식한다. PyTorch는 CUDA → MPS → CPU 순서로,
+Mitsuba는 CUDA → Metal → LLVM CPU 순서로 사용 가능한 백엔드를 선택한다.
+Metal을 지원하지 않는 빌드나 장치에서는 LLVM CPU로 자동 전환한다.
+장치나 렌더러를 지정하는 인자는 필요 없다. 선택 결과는 실행 로그에 표시된다.
+MPS는 [PyTorch의 Metal GPU 백엔드](https://docs.pytorch.org/docs/stable/notes/mps.html)이며,
+여기서는 신경망 연산을 가속한다. Mitsuba 경로 추적은 별도 백엔드를 사용한다.
+
+LLVM CPU 경로 추적을 사용하는 경우 LLVM 공유 라이브러리가 필요하다.
+Mac에서 찾지 못하는 경우 기존 LLVM 설치를 확인하고 다음과 같이 지정한다
+(미설치 시 `brew install llvm`).
+
+```sh
+export DRJIT_LIBLLVM_PATH="$(brew --prefix llvm)/lib/libLLVM.dylib"
+```
+
+Windows에서는 LLVM을 설치하고 필요하면 PowerShell에서 실제 DLL 경로를 지정한다.
+
+```powershell
+$env:DRJIT_LIBLLVM_PATH = "C:\Program Files\LLVM\bin\LLVM-C.dll"
+```
+
+이는 [Mitsuba의 LLVM CPU / CUDA·Metal GPU 백엔드](https://mitsuba.readthedocs.io/en/latest/src/key_topics/variants.html)
+선택과 별개의 라이브러리 설정이다.
+
+```sh
+# 공통: 사용 가능한 장치를 자동 선택
+python model.py
+python dataset.py
+python train.py
+
+# 체크포인트 재개 (장치를 바꿔도 같은 dataset과 output을 사용)
+python train.py --resume
+
+# 백엔드 선택, 학습 및 체크포인트 장치 이동 검사
+python -m unittest discover -s tests -v
+```
+
+데이터는 `data/cornell.pt`, 체크포인트와 `loss.png`, `inference.png`는 `outputs/`에 저장한다.
+현재 `inference.png`는 원래 경로 추적 결과와 GRU continuation 예측 오차를 비교한다.
+
 ## Foundations and Operator Theory
 
 ##### Goral et al. 1984. Modeling the Interaction of Light Between Diffuse Surfaces

@@ -7,6 +7,7 @@ import mitsuba as mi
 import numpy as np
 import torch
 from tqdm import tqdm
+from runtime import select_renderer
 
 
 ROOT = Path(__file__).resolve().parent
@@ -16,7 +17,7 @@ TARGET = "inclusive local continuation: C[d] = emitter_hit + NEE + survived_weig
 
 
 def setup_scene(resolution=256):
-    mi.set_variant("cuda_ad_rgb")
+    select_renderer()
     from path_tracer import DataPathTracer
 
     scene = mi.load_file(str(SCENE), resx=resolution, resy=resolution,
@@ -147,6 +148,7 @@ def main():
     args = parser.parse_args()
     assert args.batch_size > 0
     scene, tracer = setup_scene()
+    print(f"Mitsuba renderer: {mi.variant()}")
     rng = np.random.default_rng(42)
     pixels = rng.choice(256 * 256, 1024, replace=False)
     validation_pixels = pixels[rng.permutation(1024)[:205]]
@@ -171,7 +173,7 @@ def main():
         "feature_layout": FEATURES, "target_definition": TARGET,
         "settings": {"resolution": 256, "spp": 64, "selected_pixels": 1024,
                      "max_depth": 10, "rr_depth": 5, "seed": 42,
-                     "scene": "cornell-box", "variant": "cuda_ad_rgb",
+                     "scene": "cornell-box", "variant": mi.variant(),
                      "generation_batch_size": args.batch_size},
     }
     validate_dataset(data)
