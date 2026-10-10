@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-class DataPathTracer(mi.SamplingIntegrator):
+class PathTracer(mi.SamplingIntegrator):
     def __init__(self, props):
         super().__init__(props)
         self.max_depth = 10
